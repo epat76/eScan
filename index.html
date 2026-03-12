@@ -17,6 +17,7 @@
         :root { --bg-color: #F2F2F7; --surface-color: rgba(255, 255, 255, 0.9); --primary-color: #007AFF; --danger-color: #FF3B30; --success-color: #34C759; --text-main: #1C1C1E; --text-sub: #8E8E93; }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         
+        /* 화면 전체를 채우는 적응형 레이아웃 */
         html, body { height: 100%; min-height: 100vh; background-color: var(--bg-color); margin: 0; padding: 0; color: var(--text-main); overflow-x: hidden; display: flex; flex-direction: column; }
         
         header { display: flex; justify-content: space-between; align-items: center; padding: env(safe-area-inset-top, 20px) 20px 15px; background: var(--bg-color); position: sticky; top: 0; z-index: 100; }
@@ -41,12 +42,17 @@
         canvas { display: block; width: 100%; }
         #uiCanvas { position: absolute; top: 0; left: 0; touch-action: none; z-index: 10; }
 
+        /* 하단 컨트롤 바 */
         .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface-color); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); padding: 20px 20px calc(20px + env(safe-area-inset-bottom, 0px)); border-radius: 24px 24px 0 0; box-shadow: 0 -4px 30px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 12px; z-index: 100; transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
         .bottom-bar.show { transform: translateY(0); }
         
         select { appearance: none; -webkit-appearance: none; background: #E5E5EA; border: none; padding: 16px; border-radius: 14px; font-size: 16px; font-weight: 600; color: var(--text-main); text-align: center; width: 100%; outline: none; }
         button.action-btn { width: 100%; padding: 18px; border: none; border-radius: 14px; font-size: 17px; font-weight: 700; cursor: pointer; transition: transform 0.1s; background-color: var(--primary-color); color: #FFF; display: flex; justify-content: center; align-items: center; gap: 8px; }
         button.action-btn:active { transform: scale(0.97); }
+
+        /* 결과 화면 전용 스타일 */
+        #previewGallery { display: flex; gap: 10px; overflow-x: auto; width: 100%; padding: 10px; background: #FFF; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 25px; min-height: 150px; align-items: center; }
+        #previewGallery img { height: 120px; border-radius: 6px; border: 1px solid #E5E5EA; object-fit: contain; }
     </style>
 </head>
 <body>
@@ -62,7 +68,7 @@
     <div id="emptyState" class="empty-state">
         <input type="file" id="uploadInput" accept="image/jpeg, image/png, image/webp" multiple style="display: none;">
         <div class="upload-circle" id="uploadTrigger" style="opacity: 0.4; pointer-events: none;">
-            <svg viewBox="0 0 24 24"><path d="M12 5V19M5 12H19" /></svg>
+            <svg viewBox="0 0 24 24"><path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         </div>
         <div class="empty-text">준비 완료<br>버튼을 눌러 여러 장의 사진을 선택하세요.</div>
     </div>
@@ -75,18 +81,20 @@
         </div>
     </div>
 
-    <div id="resultState" class="empty-state" style="display: none;">
-        <div class="upload-circle" style="pointer-events: none; border: 3px solid var(--success-color);">
-            <svg viewBox="0 0 24 24" style="stroke: var(--success-color);"><path d="M20 6L9 17l-5-5" /></svg>
-        </div>
-        <div class="empty-text" style="margin-bottom: 30px;">PDF 생성이 완료되었습니다.<br>아래 버튼을 눌러 문서를 처리하세요.</div>
+    <div id="resultState" class="empty-state" style="display: none; width: 100%; max-width: 500px; padding-top: 20px;">
+        <h2 style="font-size: 20px; margin-bottom: 15px;">🎉 스캔 완료</h2>
         
-        <div style="display: flex; gap: 12px; width: 100%; max-width: 400px; padding: 0 20px;">
-            <button id="downloadBtn" class="action-btn" style="background-color: #E5E5EA; color: var(--primary-color);">⬇️ 기기에 저장</button>
-            <button id="shareBtn" class="action-btn" style="background-color: var(--success-color);">📤 외부로 공유</button>
+        <div id="previewGallery"></div>
+        
+        <div style="display: flex; flex-direction: column; gap: 12px; width: 100%; padding: 0 20px;">
+            <button id="openPdfBtn" class="action-btn" style="background-color: var(--text-main); color: #FFF;">📄 완성된 PDF 열어보기</button>
+            <div style="display: flex; gap: 12px; width: 100%;">
+                <button id="downloadBtn" class="action-btn" style="background-color: #E5E5EA; color: var(--primary-color); font-size: 15px;">⬇️ 기기 저장</button>
+                <button id="shareBtn" class="action-btn" style="background-color: var(--success-color); font-size: 15px;">📤 외부 공유</button>
+            </div>
         </div>
         
-        <button id="restartBtn" class="header-btn" style="margin-top: 40px; color: var(--text-sub); text-decoration: underline;">새로운 문서 스캔하기</button>
+        <button id="restartBtn" class="header-btn" style="margin-top: 30px; color: var(--text-sub); text-decoration: underline;">새로운 문서 스캔하기</button>
     </div>
 </main>
 
@@ -99,6 +107,7 @@
 </div>
 
 <script>
+    // 서비스 워커 등록 (오프라인 지원)
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
     }
@@ -109,7 +118,7 @@
     let fileQueue = [];
     let currentIndex = 0;
     let processedImages = []; 
-    let finalPdfBlob = null; // [신규 추가] 생성된 PDF 데이터를 임시 저장할 변수
+    let finalPdfBlob = null; 
 
     const els = {
         status: document.getElementById('status'),
@@ -118,16 +127,18 @@
         uploadTrig: document.getElementById('uploadTrigger'),
         empty: document.getElementById('emptyState'),
         workspace: document.getElementById('workspaceContainer'),
-        resultState: document.getElementById('resultState'), // 신규
+        resultState: document.getElementById('resultState'), 
         bottomBar: document.getElementById('bottomBar'),
         pageInd: document.getElementById('pageIndicator'),
         imgCv: document.getElementById('imgCanvas'),
         uiCv: document.getElementById('uiCanvas'),
         prevBtn: document.getElementById('processBtn'),
         mode: document.getElementById('scanMode'),
-        downloadBtn: document.getElementById('downloadBtn'), // 신규
-        shareBtn: document.getElementById('shareBtn'),       // 신규
-        restartBtn: document.getElementById('restartBtn')    // 신규
+        previewGallery: document.getElementById('previewGallery'),
+        openPdfBtn: document.getElementById('openPdfBtn'),
+        downloadBtn: document.getElementById('downloadBtn'), 
+        shareBtn: document.getElementById('shareBtn'),       
+        restartBtn: document.getElementById('restartBtn')    
     };
 
     const ctxImg = els.imgCv.getContext('2d'), ctxUI = els.uiCv.getContext('2d');
@@ -180,7 +191,7 @@
         drawUI();
     };
 
-    // 초기화(Cancel) 기능
+    // 초기화(Cancel/Restart) 기능
     const resetApp = () => {
         fileQueue = []; processedImages = []; currentIndex = 0; finalPdfBlob = null;
         els.uploadIn.value = "";
@@ -193,7 +204,7 @@
     els.cancelBtn.onclick = resetApp;
     els.restartBtn.onclick = resetApp;
 
-    // 극단점 추출 기반 다이내믹 모서리 인식 (이전 패치 적용 완료)
+    // 가상 모서리 복원 알고리즘 (MinAreaRect 기반 - 잘린 모서리 완벽 대응)
     function detectDocumentCorners(cW, cH) {
         let src = cv.imread(imgElement);
         let maxDim = 800.0;
@@ -204,10 +215,11 @@
         let gray = new cv.Mat(), blurred = new cv.Mat(), edges = new cv.Mat();
         cv.cvtColor(resized, gray, cv.COLOR_RGBA2GRAY, 0);
         cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
-        cv.Canny(blurred, edges, 50, 150);
         
-        let kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
+        cv.Canny(blurred, edges, 40, 150);
+        let kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(7, 7));
         cv.dilate(edges, edges, kernel);
+        cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, kernel); 
 
         let contours = new cv.MatVector(), hierarchy = new cv.Mat();
         cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
@@ -224,20 +236,21 @@
         }
 
         let foundCorners = false;
+        
         if (largestContour && maxArea > (resized.cols * resized.rows * 0.05)) {
-            let pts = largestContour.data32S, numPts = pts.length / 2;
-            let tl = {x: pts[0], y: pts[1]}, br = {x: pts[0], y: pts[1]}, tr = {x: pts[0], y: pts[1]}, bl = {x: pts[0], y: pts[1]};
-            let minSum = tl.x + tl.y, maxSum = br.x + br.y, minDiff = bl.x - bl.y, maxDiff = tr.x - tr.y;
-
-            for (let i = 1; i < numPts; i++) {
-                let x = pts[i * 2], y = pts[i * 2 + 1], sum = x + y, diff = x - y;
-                if (sum < minSum) { minSum = sum; tl = {x, y}; }
-                if (sum > maxSum) { maxSum = sum; br = {x, y}; }
-                if (diff > maxDiff) { maxDiff = diff; tr = {x, y}; }
-                if (diff < minDiff) { minDiff = diff; bl = {x, y}; }
-            }
+            let rotatedRect = cv.minAreaRect(largestContour);
+            let vertices = cv.RotatedRect.points(rotatedRect);
+            
             let finalScale = renderScale / scale;
-            corners = [{x: tl.x * finalScale, y: tl.y * finalScale}, {x: tr.x * finalScale, y: tr.y * finalScale}, {x: br.x * finalScale, y: br.y * finalScale}, {x: bl.x * finalScale, y: bl.y * finalScale}];
+            let pts = [];
+            for (let i = 0; i < 4; i++) {
+                pts.push({ x: vertices[i].x * finalScale, y: vertices[i].y * finalScale });
+            }
+
+            let center = pts.reduce((acc, p) => ({x: acc.x + p.x/4, y: acc.y + p.y/4}), {x:0, y:0});
+            pts.sort((a, b) => Math.atan2(a.y - center.y, a.x - center.x) - Math.atan2(b.y - center.y, b.x - center.x));
+
+            corners = pts;
             foundCorners = true;
         }
 
@@ -274,6 +287,7 @@
     els.uiCv.addEventListener('mousedown', onDown); els.uiCv.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
     els.uiCv.addEventListener('touchstart', onDown, {passive: false}); els.uiCv.addEventListener('touchmove', onMove, {passive: false}); window.addEventListener('touchend', onUp);
 
+    // 원근 보정 및 스캔 필터 적용
     els.prevBtn.onclick = () => {
         if (!isCvLoaded) return;
         
@@ -306,23 +320,28 @@
         }
     };
 
-    // [로직 수정] 결과물을 다운로드하지 않고 Blob 형태로 메모리에 추출 후 UI 변경
+    // PDF 병합 및 결과 화면 렌더링
     function generateFinalPDF() {
         const { jsPDF } = window.jspdf; 
         const pdf = new jsPDF('p', 'mm', 'a4');
         
+        els.previewGallery.innerHTML = ''; // 갤러리 초기화
+
         function addPageToPDF(index) {
             if (index >= processedImages.length) {
-                // PDF 생성이 완료되면 Blob(이진 데이터) 형태로 저장
                 finalPdfBlob = pdf.output('blob');
                 
-                // 작업 화면을 숨기고 '결과 화면' 표시
                 els.workspace.style.display = 'none';
                 els.bottomBar.classList.remove('show');
                 els.cancelBtn.style.visibility = 'hidden';
                 els.resultState.style.display = 'flex';
                 return;
             }
+            
+            // 미리보기 썸네일 추가
+            const thumb = document.createElement('img');
+            thumb.src = processedImages[index];
+            els.previewGallery.appendChild(thumb);
             
             if (index > 0) pdf.addPage();
             
@@ -339,7 +358,13 @@
         addPageToPDF(0);
     }
 
-    // [신규 기능 1] 다운로드 버튼 이벤트 처리
+    // 결과 화면 기능 할당
+    els.openPdfBtn.onclick = () => {
+        if(!finalPdfBlob) return;
+        const url = URL.createObjectURL(finalPdfBlob);
+        window.open(url, '_blank');
+    };
+
     els.downloadBtn.onclick = () => {
         if(!finalPdfBlob) return;
         const url = URL.createObjectURL(finalPdfBlob);
@@ -352,14 +377,9 @@
         URL.revokeObjectURL(url);
     };
 
-    // [신규 기능 2] 아이폰 네이티브 공유(Web Share API) 이벤트 처리
     els.shareBtn.onclick = async () => {
         if(!finalPdfBlob) return;
-        
-        // Blob 데이터를 File 객체로 변환
         const file = new File([finalPdfBlob], `Scanned_Document_${Date.now()}.pdf`, { type: 'application/pdf' });
-        
-        // 기기가 파일 공유 기능을 지원하는지 확인
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
             try {
                 await navigator.share({
@@ -367,11 +387,9 @@
                     title: '스캔 문서',
                     text: '스캐너 앱에서 생성된 PDF 문서입니다.'
                 });
-            } catch (err) {
-                console.log('공유 취소됨', err);
-            }
+            } catch (err) { console.log('공유 취소됨', err); }
         } else {
-            alert('이 브라우저에서는 공유 기능을 지원하지 않습니다. 다운로드 버튼을 이용해 주세요.');
+            alert('이 기기/브라우저에서는 공유 기능을 지원하지 않습니다. 다운로드 버튼을 이용해 주세요.');
         }
     };
 </script>
