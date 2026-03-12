@@ -14,24 +14,21 @@
     <script async src="https://docs.opencv.org/4.8.0/opencv.js" onload="onOpenCvReady();"></script>
     
     <style>
-        :root { --bg-color: #F2F2F7; --surface-color: rgba(255, 255, 255, 0.9); --primary-color: #007AFF; --danger-color: #FF3B30; --text-main: #1C1C1E; --text-sub: #8E8E93; }
+        :root { --bg-color: #F2F2F7; --surface-color: rgba(255, 255, 255, 0.9); --primary-color: #007AFF; --danger-color: #FF3B30; --success-color: #34C759; --text-main: #1C1C1E; --text-sub: #8E8E93; }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         
-        /* [이슈 5 해결] 화면 전체를 채우는 적응형 레이아웃 */
         html, body { height: 100%; min-height: 100vh; background-color: var(--bg-color); margin: 0; padding: 0; color: var(--text-main); overflow-x: hidden; display: flex; flex-direction: column; }
         
-        /* 상단 네비게이션 바 (진행 취소 기능 포함) */
         header { display: flex; justify-content: space-between; align-items: center; padding: env(safe-area-inset-top, 20px) 20px 15px; background: var(--bg-color); position: sticky; top: 0; z-index: 100; }
         .header-btn { font-size: 16px; font-weight: 500; color: var(--primary-color); background: none; border: none; padding: 5px 0; cursor: pointer; }
-        .header-btn.cancel { color: var(--danger-color); visibility: hidden; } /* 초기엔 숨김 */
+        .header-btn.cancel { color: var(--danger-color); visibility: hidden; }
         h1 { font-size: 18px; font-weight: 700; margin: 0; text-align: center; flex: 1; }
         
         .status-banner { text-align: center; font-size: 13px; color: #FF9500; font-weight: 600; padding-bottom: 10px; }
 
-        /* 중앙 작업 영역 */
         main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 20px 140px; }
         
-        .empty-state { display: flex; flex-direction: column; align-items: center; }
+        .empty-state { display: flex; flex-direction: column; align-items: center; width: 100%; }
         .upload-circle { width: 84px; height: 84px; background: #FFF; border-radius: 42px; display: flex; justify-content: center; align-items: center; box-shadow: 0 8px 24px rgba(0,0,0,0.08); margin-bottom: 24px; cursor: pointer; transition: transform 0.2s; }
         .upload-circle:active { transform: scale(0.95); }
         .upload-circle svg { width: 36px; height: 36px; fill: none; stroke: var(--primary-color); stroke-width: 2.5; stroke-linecap: round; }
@@ -44,12 +41,11 @@
         canvas { display: block; width: 100%; }
         #uiCanvas { position: absolute; top: 0; left: 0; touch-action: none; z-index: 10; }
 
-        /* 하단 컨트롤 바 */
         .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface-color); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); padding: 20px 20px calc(20px + env(safe-area-inset-bottom, 0px)); border-radius: 24px 24px 0 0; box-shadow: 0 -4px 30px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 12px; z-index: 100; transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
         .bottom-bar.show { transform: translateY(0); }
         
         select { appearance: none; -webkit-appearance: none; background: #E5E5EA; border: none; padding: 16px; border-radius: 14px; font-size: 16px; font-weight: 600; color: var(--text-main); text-align: center; width: 100%; outline: none; }
-        button.action-btn { width: 100%; padding: 18px; border: none; border-radius: 14px; font-size: 17px; font-weight: 700; cursor: pointer; transition: transform 0.1s; background-color: var(--primary-color); color: #FFF; }
+        button.action-btn { width: 100%; padding: 18px; border: none; border-radius: 14px; font-size: 17px; font-weight: 700; cursor: pointer; transition: transform 0.1s; background-color: var(--primary-color); color: #FFF; display: flex; justify-content: center; align-items: center; gap: 8px; }
         button.action-btn:active { transform: scale(0.97); }
     </style>
 </head>
@@ -78,6 +74,20 @@
             <canvas id="uiCanvas"></canvas>
         </div>
     </div>
+
+    <div id="resultState" class="empty-state" style="display: none;">
+        <div class="upload-circle" style="pointer-events: none; border: 3px solid var(--success-color);">
+            <svg viewBox="0 0 24 24" style="stroke: var(--success-color);"><path d="M20 6L9 17l-5-5" /></svg>
+        </div>
+        <div class="empty-text" style="margin-bottom: 30px;">PDF 생성이 완료되었습니다.<br>아래 버튼을 눌러 문서를 처리하세요.</div>
+        
+        <div style="display: flex; gap: 12px; width: 100%; max-width: 400px; padding: 0 20px;">
+            <button id="downloadBtn" class="action-btn" style="background-color: #E5E5EA; color: var(--primary-color);">⬇️ 기기에 저장</button>
+            <button id="shareBtn" class="action-btn" style="background-color: var(--success-color);">📤 외부로 공유</button>
+        </div>
+        
+        <button id="restartBtn" class="header-btn" style="margin-top: 40px; color: var(--text-sub); text-decoration: underline;">새로운 문서 스캔하기</button>
+    </div>
 </main>
 
 <div class="bottom-bar" id="bottomBar">
@@ -96,10 +106,10 @@
     let isCvLoaded = false, imgElement = new Image();
     let corners = [], isDragging = false, dragIndex = -1, renderScale = 1;
     
-    // 다중 파일 처리용 대기열 (Queue) 상태 변수
     let fileQueue = [];
     let currentIndex = 0;
-    let processedImages = []; // 최종 PDF에 들어갈 base64 데이터 배열
+    let processedImages = []; 
+    let finalPdfBlob = null; // [신규 추가] 생성된 PDF 데이터를 임시 저장할 변수
 
     const els = {
         status: document.getElementById('status'),
@@ -108,17 +118,20 @@
         uploadTrig: document.getElementById('uploadTrigger'),
         empty: document.getElementById('emptyState'),
         workspace: document.getElementById('workspaceContainer'),
+        resultState: document.getElementById('resultState'), // 신규
         bottomBar: document.getElementById('bottomBar'),
         pageInd: document.getElementById('pageIndicator'),
         imgCv: document.getElementById('imgCanvas'),
         uiCv: document.getElementById('uiCanvas'),
         prevBtn: document.getElementById('processBtn'),
-        mode: document.getElementById('scanMode')
+        mode: document.getElementById('scanMode'),
+        downloadBtn: document.getElementById('downloadBtn'), // 신규
+        shareBtn: document.getElementById('shareBtn'),       // 신규
+        restartBtn: document.getElementById('restartBtn')    // 신규
     };
 
     const ctxImg = els.imgCv.getContext('2d'), ctxUI = els.uiCv.getContext('2d');
 
-    // 엔진 로드
     function onOpenCvReady() {
         cv['onRuntimeInitialized'] = () => { 
             isCvLoaded = true; 
@@ -128,20 +141,16 @@
         };
     }
 
-    // 파일 업로드 이벤트
     els.uploadTrig.onclick = () => els.uploadIn.click();
     els.uploadIn.onchange = (e) => { 
         if (!e.target.files.length) return;
-        
-        // 큐 초기화
         fileQueue = Array.from(e.target.files);
         currentIndex = 0;
         processedImages = [];
-        
+        finalPdfBlob = null;
         loadCurrentFile();
     };
 
-    // 현재 인덱스의 파일 렌더링
     function loadCurrentFile() {
         const file = fileQueue[currentIndex];
         const reader = new FileReader();
@@ -150,8 +159,8 @@
     }
 
     imgElement.onload = () => {
-        // UI 모드 전환
         els.empty.style.display = 'none'; 
+        els.resultState.style.display = 'none';
         els.workspace.style.display = 'flex'; 
         els.bottomBar.classList.add('show');
         els.cancelBtn.style.visibility = 'visible';
@@ -167,85 +176,81 @@
         els.imgCv.height = els.uiCv.height = cH;
         ctxImg.drawImage(imgElement, 0, 0, cW, cH);
         
-        // [이슈 2 해결] OpenCV를 이용한 자동 모서리 검출 실행
         detectDocumentCorners(cW, cH);
         drawUI();
     };
 
-    // [이슈 4 해결] 초기화(Cancel) 기능
-    els.cancelBtn.onclick = () => {
-        fileQueue = []; processedImages = []; currentIndex = 0;
+    // 초기화(Cancel) 기능
+    const resetApp = () => {
+        fileQueue = []; processedImages = []; currentIndex = 0; finalPdfBlob = null;
         els.uploadIn.value = "";
         els.empty.style.display = 'flex';
         els.workspace.style.display = 'none';
+        els.resultState.style.display = 'none';
         els.bottomBar.classList.remove('show');
         els.cancelBtn.style.visibility = 'hidden';
     };
+    els.cancelBtn.onclick = resetApp;
+    els.restartBtn.onclick = resetApp;
 
-    // [이슈 2 해결 알고리즘] 자동 모서리 검출 (Canny Edge + FindContours)
+    // 극단점 추출 기반 다이내믹 모서리 인식 (이전 패치 적용 완료)
     function detectDocumentCorners(cW, cH) {
         let src = cv.imread(imgElement);
+        let maxDim = 800.0;
+        let scale = Math.min(maxDim / src.cols, maxDim / src.rows);
+        let resized = new cv.Mat(), dsize = new cv.Size(src.cols * scale, src.rows * scale);
+        cv.resize(src, resized, dsize, 0, 0, cv.INTER_AREA);
+
         let gray = new cv.Mat(), blurred = new cv.Mat(), edges = new cv.Mat();
-        
-        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
+        cv.cvtColor(resized, gray, cv.COLOR_RGBA2GRAY, 0);
         cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
-        cv.Canny(blurred, edges, 75, 200);
+        cv.Canny(blurred, edges, 50, 150);
+        
+        let kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
+        cv.dilate(edges, edges, kernel);
 
         let contours = new cv.MatVector(), hierarchy = new cv.Mat();
-        cv.findContours(edges, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
+        cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
 
-        let maxArea = 0;
-        let bestApprox = new cv.Mat();
-
+        let maxArea = 0, largestContour = null;
         for (let i = 0; i < contours.size(); ++i) {
-            let cnt = contours.get(i);
-            let area = cv.contourArea(cnt);
-            if (area > 1000) { // 너무 작은 노이즈 제외
-                let peri = cv.arcLength(cnt, true);
-                let approx = new cv.Mat();
-                cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
-                // 꼭짓점이 4개이고 면적이 가장 큰 도형 찾기
-                if (approx.rows === 4 && area > maxArea) {
-                    maxArea = area;
-                    approx.copyTo(bestApprox);
-                }
-                approx.delete();
+            let cnt = contours.get(i), area = cv.contourArea(cnt);
+            if (area > maxArea) {
+                maxArea = area;
+                if (largestContour) largestContour.delete();
+                largestContour = cnt.clone();
             }
             cnt.delete();
         }
 
-        if (maxArea > 0) {
-            // 검출 성공 시 좌표를 캔버스 비율에 맞게 스케일링
-            let detected = [];
-            for(let i=0; i<4; i++) {
-                detected.push({
-                    x: bestApprox.data32S[i*2] * renderScale, 
-                    y: bestApprox.data32S[i*2+1] * renderScale
-                });
+        let foundCorners = false;
+        if (largestContour && maxArea > (resized.cols * resized.rows * 0.05)) {
+            let pts = largestContour.data32S, numPts = pts.length / 2;
+            let tl = {x: pts[0], y: pts[1]}, br = {x: pts[0], y: pts[1]}, tr = {x: pts[0], y: pts[1]}, bl = {x: pts[0], y: pts[1]};
+            let minSum = tl.x + tl.y, maxSum = br.x + br.y, minDiff = bl.x - bl.y, maxDiff = tr.x - tr.y;
+
+            for (let i = 1; i < numPts; i++) {
+                let x = pts[i * 2], y = pts[i * 2 + 1], sum = x + y, diff = x - y;
+                if (sum < minSum) { minSum = sum; tl = {x, y}; }
+                if (sum > maxSum) { maxSum = sum; br = {x, y}; }
+                if (diff > maxDiff) { maxDiff = diff; tr = {x, y}; }
+                if (diff < minDiff) { minDiff = diff; bl = {x, y}; }
             }
-            // 수학적으로 좌상, 우상, 우하, 좌하 정렬
-            corners = sortCorners(detected);
-        } else {
-            // 검출 실패 시 기본 10% 여백 사각형 제공
-            const m = Math.min(cW, cH) * 0.1; 
+            let finalScale = renderScale / scale;
+            corners = [{x: tl.x * finalScale, y: tl.y * finalScale}, {x: tr.x * finalScale, y: tr.y * finalScale}, {x: br.x * finalScale, y: br.y * finalScale}, {x: bl.x * finalScale, y: bl.y * finalScale}];
+            foundCorners = true;
+        }
+
+        if (!foundCorners) {
+            const m = Math.min(cW, cH) * 0.1;
             corners = [{x:m, y:m}, {x:cW-m, y:m}, {x:cW-m, y:cH-m}, {x:m, y:cH-m}];
         }
 
-        src.delete(); gray.delete(); blurred.delete(); edges.delete(); 
-        contours.delete(); hierarchy.delete(); bestApprox.delete();
+        if(largestContour) largestContour.delete();
+        src.delete(); resized.delete(); gray.delete(); blurred.delete(); 
+        edges.delete(); kernel.delete(); contours.delete(); hierarchy.delete();
     }
 
-    // 꼭짓점 정렬 알고리즘 (TL, TR, BR, BL 순서 강제)
-    function sortCorners(pts) {
-        let center = pts.reduce((acc, p) => ({x: acc.x + p.x/4, y: acc.y + p.y/4}), {x:0, y:0});
-        return pts.sort((a, b) => {
-            let angleA = Math.atan2(a.y - center.y, a.x - center.x);
-            let angleB = Math.atan2(b.y - center.y, b.x - center.x);
-            return angleA - angleB;
-        });
-    }
-
-    // 돋보기 및 조절 핸들 렌더링
     function drawUI() {
         ctxUI.clearRect(0, 0, els.uiCv.width, els.uiCv.height); 
         ctxUI.beginPath(); ctxUI.moveTo(corners[0].x, corners[0].y);
@@ -261,7 +266,6 @@
         });
     }
 
-    // 터치 조작 이벤트 (기존과 동일)
     function getPos(e) { const r = els.uiCv.getBoundingClientRect(); return { x: (e.touches ? e.touches[0].clientX : e.clientX) - r.left, y: (e.touches ? e.touches[0].clientY : e.clientY) - r.top }; }
     const onDown = e => { e.preventDefault(); const p = getPos(e); dragIndex = corners.findIndex(c => Math.hypot(c.x - p.x, c.y - p.y) < 40); if(dragIndex !== -1) isDragging = true; };
     const onMove = e => { if(!isDragging) return; e.preventDefault(); corners[dragIndex] = getPos(e); drawUI(); };
@@ -270,11 +274,9 @@
     els.uiCv.addEventListener('mousedown', onDown); els.uiCv.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
     els.uiCv.addEventListener('touchstart', onDown, {passive: false}); els.uiCv.addEventListener('touchmove', onMove, {passive: false}); window.addEventListener('touchend', onUp);
 
-    // 스캔 적용 및 다음 단계 진행
     els.prevBtn.onclick = () => {
         if (!isCvLoaded) return;
         
-        // 1. 현재 화면 설정값으로 원근 및 필터 변환
         const pts = corners.map(p => ({ x: p.x / renderScale, y: p.y / renderScale }));
         const wA = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y), wB = Math.hypot(pts[2].x - pts[3].x, pts[2].y - pts[3].y), maxW = Math.max(wA, wB);
         const hA = Math.hypot(pts[0].x - pts[3].x, pts[0].y - pts[3].y), hB = Math.hypot(pts[1].x - pts[2].x, pts[1].y - pts[2].y), maxH = Math.max(hA, hB);
@@ -292,30 +294,33 @@
         }
 
         const out = document.createElement('canvas'); cv.imshow(out, dst); 
-        processedImages.push(out.toDataURL('image/jpeg', 0.9)); // 결과물 배열에 저장
-        
+        processedImages.push(out.toDataURL('image/jpeg', 0.9)); 
         src.delete(); dst.delete(); M.delete(); sC.delete(); dC.delete();
 
-        // 2. 큐 확인 (다음 이미지가 남았는지, 완료인지)
         if (currentIndex < fileQueue.length - 1) {
             currentIndex++;
-            loadCurrentFile(); // 다음 사진 로드
+            loadCurrentFile();
             window.scrollTo({ top: 0, behavior: 'smooth' });
         } else {
-            generateFinalPDF(); // 모든 사진 처리 완료 -> PDF 생성
+            generateFinalPDF(); 
         }
     };
 
-    // 최종 다중 페이지 PDF 생성 함수
+    // [로직 수정] 결과물을 다운로드하지 않고 Blob 형태로 메모리에 추출 후 UI 변경
     function generateFinalPDF() {
         const { jsPDF } = window.jspdf; 
         const pdf = new jsPDF('p', 'mm', 'a4');
         
-        // 비동기 이미지 로드를 위한 재귀 함수 패턴
         function addPageToPDF(index) {
             if (index >= processedImages.length) {
-                pdf.save(`Scanned_Doc_${Date.now()}.pdf`);
-                els.cancelBtn.click(); // 다운로드 후 초기 화면으로 자동 복귀
+                // PDF 생성이 완료되면 Blob(이진 데이터) 형태로 저장
+                finalPdfBlob = pdf.output('blob');
+                
+                // 작업 화면을 숨기고 '결과 화면' 표시
+                els.workspace.style.display = 'none';
+                els.bottomBar.classList.remove('show');
+                els.cancelBtn.style.visibility = 'hidden';
+                els.resultState.style.display = 'flex';
                 return;
             }
             
@@ -330,10 +335,45 @@
                 addPageToPDF(index + 1);
             }
         }
-        
-        els.prevBtn.textContent = "PDF 생성 중...";
+        els.prevBtn.textContent = "PDF 병합 중...";
         addPageToPDF(0);
     }
+
+    // [신규 기능 1] 다운로드 버튼 이벤트 처리
+    els.downloadBtn.onclick = () => {
+        if(!finalPdfBlob) return;
+        const url = URL.createObjectURL(finalPdfBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Scanned_Document_${Date.now()}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    // [신규 기능 2] 아이폰 네이티브 공유(Web Share API) 이벤트 처리
+    els.shareBtn.onclick = async () => {
+        if(!finalPdfBlob) return;
+        
+        // Blob 데이터를 File 객체로 변환
+        const file = new File([finalPdfBlob], `Scanned_Document_${Date.now()}.pdf`, { type: 'application/pdf' });
+        
+        // 기기가 파일 공유 기능을 지원하는지 확인
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+                await navigator.share({
+                    files: [file],
+                    title: '스캔 문서',
+                    text: '스캐너 앱에서 생성된 PDF 문서입니다.'
+                });
+            } catch (err) {
+                console.log('공유 취소됨', err);
+            }
+        } else {
+            alert('이 브라우저에서는 공유 기능을 지원하지 않습니다. 다운로드 버튼을 이용해 주세요.');
+        }
+    };
 </script>
 
 </body>
