@@ -17,7 +17,6 @@
         :root { --bg-color: #F2F2F7; --surface-color: rgba(255, 255, 255, 0.9); --primary-color: #007AFF; --danger-color: #FF3B30; --success-color: #34C759; --text-main: #1C1C1E; --text-sub: #8E8E93; }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         
-        /* 화면 전체를 채우는 적응형 레이아웃 */
         html, body { height: 100%; min-height: 100vh; background-color: var(--bg-color); margin: 0; padding: 0; color: var(--text-main); overflow-x: hidden; display: flex; flex-direction: column; }
         
         header { display: flex; justify-content: space-between; align-items: center; padding: env(safe-area-inset-top, 20px) 20px 15px; background: var(--bg-color); position: sticky; top: 0; z-index: 100; }
@@ -42,7 +41,6 @@
         canvas { display: block; width: 100%; }
         #uiCanvas { position: absolute; top: 0; left: 0; touch-action: none; z-index: 10; }
 
-        /* 하단 컨트롤 바 */
         .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface-color); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); padding: 20px 20px calc(20px + env(safe-area-inset-bottom, 0px)); border-radius: 24px 24px 0 0; box-shadow: 0 -4px 30px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 12px; z-index: 100; transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
         .bottom-bar.show { transform: translateY(0); }
         
@@ -50,7 +48,6 @@
         button.action-btn { width: 100%; padding: 18px; border: none; border-radius: 14px; font-size: 17px; font-weight: 700; cursor: pointer; transition: transform 0.1s; background-color: var(--primary-color); color: #FFF; display: flex; justify-content: center; align-items: center; gap: 8px; }
         button.action-btn:active { transform: scale(0.97); }
 
-        /* 결과 화면 전용 스타일 */
         #previewGallery { display: flex; gap: 10px; overflow-x: auto; width: 100%; padding: 10px; background: #FFF; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 25px; min-height: 150px; align-items: center; }
         #previewGallery img { height: 120px; border-radius: 6px; border: 1px solid #E5E5EA; object-fit: contain; }
     </style>
@@ -83,9 +80,7 @@
 
     <div id="resultState" class="empty-state" style="display: none; width: 100%; max-width: 500px; padding-top: 20px;">
         <h2 style="font-size: 20px; margin-bottom: 15px;">🎉 스캔 완료</h2>
-        
         <div id="previewGallery"></div>
-        
         <div style="display: flex; flex-direction: column; gap: 12px; width: 100%; padding: 0 20px;">
             <button id="openPdfBtn" class="action-btn" style="background-color: var(--text-main); color: #FFF;">📄 완성된 PDF 열어보기</button>
             <div style="display: flex; gap: 12px; width: 100%;">
@@ -93,7 +88,6 @@
                 <button id="shareBtn" class="action-btn" style="background-color: var(--success-color); font-size: 15px;">📤 외부 공유</button>
             </div>
         </div>
-        
         <button id="restartBtn" class="header-btn" style="margin-top: 30px; color: var(--text-sub); text-decoration: underline;">새로운 문서 스캔하기</button>
     </div>
 </main>
@@ -107,38 +101,24 @@
 </div>
 
 <script>
-    // 서비스 워커 등록 (오프라인 지원)
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
     }
 
     let isCvLoaded = false, imgElement = new Image();
     let corners = [], isDragging = false, dragIndex = -1, renderScale = 1;
-    
-    let fileQueue = [];
-    let currentIndex = 0;
-    let processedImages = []; 
-    let finalPdfBlob = null; 
+    let fileQueue = [], currentIndex = 0, processedImages = [], finalPdfBlob = null; 
 
     const els = {
-        status: document.getElementById('status'),
-        cancelBtn: document.getElementById('cancelBtn'),
-        uploadIn: document.getElementById('uploadInput'),
-        uploadTrig: document.getElementById('uploadTrigger'),
-        empty: document.getElementById('emptyState'),
-        workspace: document.getElementById('workspaceContainer'),
-        resultState: document.getElementById('resultState'), 
-        bottomBar: document.getElementById('bottomBar'),
-        pageInd: document.getElementById('pageIndicator'),
-        imgCv: document.getElementById('imgCanvas'),
-        uiCv: document.getElementById('uiCanvas'),
-        prevBtn: document.getElementById('processBtn'),
-        mode: document.getElementById('scanMode'),
-        previewGallery: document.getElementById('previewGallery'),
-        openPdfBtn: document.getElementById('openPdfBtn'),
-        downloadBtn: document.getElementById('downloadBtn'), 
-        shareBtn: document.getElementById('shareBtn'),       
-        restartBtn: document.getElementById('restartBtn')    
+        status: document.getElementById('status'), cancelBtn: document.getElementById('cancelBtn'),
+        uploadIn: document.getElementById('uploadInput'), uploadTrig: document.getElementById('uploadTrigger'),
+        empty: document.getElementById('emptyState'), workspace: document.getElementById('workspaceContainer'),
+        resultState: document.getElementById('resultState'), bottomBar: document.getElementById('bottomBar'),
+        pageInd: document.getElementById('pageIndicator'), imgCv: document.getElementById('imgCanvas'),
+        uiCv: document.getElementById('uiCanvas'), prevBtn: document.getElementById('processBtn'),
+        mode: document.getElementById('scanMode'), previewGallery: document.getElementById('previewGallery'),
+        openPdfBtn: document.getElementById('openPdfBtn'), downloadBtn: document.getElementById('downloadBtn'), 
+        shareBtn: document.getElementById('shareBtn'), restartBtn: document.getElementById('restartBtn')    
     };
 
     const ctxImg = els.imgCv.getContext('2d'), ctxUI = els.uiCv.getContext('2d');
@@ -147,18 +127,14 @@
         cv['onRuntimeInitialized'] = () => { 
             isCvLoaded = true; 
             els.status.style.display = 'none';
-            els.uploadTrig.style.opacity = "1"; 
-            els.uploadTrig.style.pointerEvents = "auto"; 
+            els.uploadTrig.style.opacity = "1"; els.uploadTrig.style.pointerEvents = "auto"; 
         };
     }
 
     els.uploadTrig.onclick = () => els.uploadIn.click();
     els.uploadIn.onchange = (e) => { 
         if (!e.target.files.length) return;
-        fileQueue = Array.from(e.target.files);
-        currentIndex = 0;
-        processedImages = [];
-        finalPdfBlob = null;
+        fileQueue = Array.from(e.target.files); currentIndex = 0; processedImages = []; finalPdfBlob = null;
         loadCurrentFile();
     };
 
@@ -170,41 +146,30 @@
     }
 
     imgElement.onload = () => {
-        els.empty.style.display = 'none'; 
-        els.resultState.style.display = 'none';
-        els.workspace.style.display = 'flex'; 
-        els.bottomBar.classList.add('show');
-        els.cancelBtn.style.visibility = 'visible';
+        els.empty.style.display = 'none'; els.resultState.style.display = 'none'; els.workspace.style.display = 'flex'; 
+        els.bottomBar.classList.add('show'); els.cancelBtn.style.visibility = 'visible';
         
         els.pageInd.textContent = `페이지 ${currentIndex + 1} / ${fileQueue.length}`;
         els.prevBtn.textContent = (currentIndex === fileQueue.length - 1) ? "스캔 및 PDF 생성" : "다음 페이지 스캔";
 
-        const maxW = Math.min(500, window.innerWidth - 40); 
-        renderScale = maxW / imgElement.width;
+        const maxW = Math.min(500, window.innerWidth - 40); renderScale = maxW / imgElement.width;
         const cW = imgElement.width * renderScale, cH = imgElement.height * renderScale;
         
-        els.imgCv.width = els.uiCv.width = cW; 
-        els.imgCv.height = els.uiCv.height = cH;
+        els.imgCv.width = els.uiCv.width = cW; els.imgCv.height = els.uiCv.height = cH;
         ctxImg.drawImage(imgElement, 0, 0, cW, cH);
         
         detectDocumentCorners(cW, cH);
         drawUI();
     };
 
-    // 초기화(Cancel/Restart) 기능
     const resetApp = () => {
         fileQueue = []; processedImages = []; currentIndex = 0; finalPdfBlob = null;
-        els.uploadIn.value = "";
-        els.empty.style.display = 'flex';
-        els.workspace.style.display = 'none';
-        els.resultState.style.display = 'none';
-        els.bottomBar.classList.remove('show');
-        els.cancelBtn.style.visibility = 'hidden';
+        els.uploadIn.value = ""; els.empty.style.display = 'flex'; els.workspace.style.display = 'none';
+        els.resultState.style.display = 'none'; els.bottomBar.classList.remove('show'); els.cancelBtn.style.visibility = 'hidden';
     };
-    els.cancelBtn.onclick = resetApp;
-    els.restartBtn.onclick = resetApp;
+    els.cancelBtn.onclick = resetApp; els.restartBtn.onclick = resetApp;
 
-    // 가상 모서리 복원 알고리즘 (MinAreaRect 기반 - 잘린 모서리 완벽 대응)
+    // [최상위 전문가 패치] 선분 교차점 기반 가상 모서리 추출 알고리즘 (훼손된 모서리 추론)
     function detectDocumentCorners(cW, cH) {
         let src = cv.imread(imgElement);
         let maxDim = 800.0;
@@ -216,10 +181,10 @@
         cv.cvtColor(resized, gray, cv.COLOR_RGBA2GRAY, 0);
         cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
         
-        cv.Canny(blurred, edges, 40, 150);
-        let kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(7, 7));
+        // Canny 임계값을 낮춰 배경과 문서의 미세한 명암 차이도 검출
+        cv.Canny(blurred, edges, 30, 100);
+        let kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
         cv.dilate(edges, edges, kernel);
-        cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, kernel); 
 
         let contours = new cv.MatVector(), hierarchy = new cv.Mat();
         cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
@@ -238,20 +203,67 @@
         let foundCorners = false;
         
         if (largestContour && maxArea > (resized.cols * resized.rows * 0.05)) {
-            let rotatedRect = cv.minAreaRect(largestContour);
-            let vertices = cv.RotatedRect.points(rotatedRect);
+            let peri = cv.arcLength(largestContour, true);
+            let approx = new cv.Mat();
+            cv.approxPolyDP(largestContour, approx, 0.02 * peri, true);
             
-            let finalScale = renderScale / scale;
-            let pts = [];
-            for (let i = 0; i < 4; i++) {
-                pts.push({ x: vertices[i].x * finalScale, y: vertices[i].y * finalScale });
+            let pts = approx.data32S;
+            let numVertices = pts.length / 2;
+            let segments = [];
+
+            // 다각형의 모든 선분(변) 길이 계산
+            for (let i = 0; i < numVertices; i++) {
+                let p1 = { x: pts[i*2], y: pts[i*2+1] };
+                let p2 = { x: pts[(i+1)%numVertices * 2], y: pts[(i+1)%numVertices * 2 + 1] };
+                let dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+                segments.push({ p1, p2, dist });
             }
 
-            let center = pts.reduce((acc, p) => ({x: acc.x + p.x/4, y: acc.y + p.y/4}), {x:0, y:0});
-            pts.sort((a, b) => Math.atan2(a.y - center.y, a.x - center.x) - Math.atan2(b.y - center.y, b.x - center.x));
+            // 가장 긴 4개의 선분(문서의 상하좌우 면) 추출
+            segments.sort((a, b) => b.dist - a.dist);
+            let top4 = segments.slice(0, 4);
 
-            corners = pts;
-            foundCorners = true;
+            if (top4.length === 4) {
+                let cx = top4.reduce((sum, seg) => sum + (seg.p1.x + seg.p2.x)/2, 0) / 4;
+                let cy = top4.reduce((sum, seg) => sum + (seg.p1.y + seg.p2.y)/2, 0) / 4;
+                
+                // 중심점을 기준으로 선분들을 시계방향으로 정렬하여 올바른 교차쌍 형성
+                top4.sort((a, b) => {
+                    let angleA = Math.atan2((a.p1.y + a.p2.y)/2 - cy, (a.p1.x + a.p2.x)/2 - cx);
+                    let angleB = Math.atan2((b.p1.y + b.p2.y)/2 - cy, (b.p1.x + b.p2.x)/2 - cx);
+                    return angleA - angleB;
+                });
+
+                let finalScale = renderScale / scale;
+                let intersections = [];
+
+                // 인접한 두 선분 간의 수학적 교차점(수학적 가상 꼭짓점) 계산
+                for (let i = 0; i < 4; i++) {
+                    let line1 = top4[i];
+                    let line2 = top4[(i+1)%4];
+
+                    let x1 = line1.p1.x, y1 = line1.p1.y, x2 = line1.p2.x, y2 = line1.p2.y;
+                    let x3 = line2.p1.x, y3 = line2.p1.y, x4 = line2.p2.x, y4 = line2.p2.y;
+
+                    let denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+                    if (denom !== 0) {
+                        let px = ((x1*y2 - y1*x2)*(x3 - x4) - (x1 - x2)*(x3*y4 - y3*x4)) / denom;
+                        let py = ((x1*y2 - y1*x2)*(y3 - y4) - (y1 - y2)*(x3*y4 - y3*x4)) / denom;
+                        intersections.push({ x: px * finalScale, y: py * finalScale });
+                    }
+                }
+
+                if (intersections.length === 4) {
+                    // 계산된 4개의 교차점을 좌상-우상-우하-좌하 순서로 최종 정렬
+                    let intCx = intersections.reduce((sum, p) => sum + p.x, 0) / 4;
+                    let intCy = intersections.reduce((sum, p) => sum + p.y, 0) / 4;
+                    intersections.sort((a, b) => Math.atan2(a.y - intCy, a.x - intCx) - Math.atan2(b.y - intCy, b.x - intCx));
+                    
+                    corners = intersections;
+                    foundCorners = true;
+                }
+            }
+            approx.delete();
         }
 
         if (!foundCorners) {
@@ -287,7 +299,6 @@
     els.uiCv.addEventListener('mousedown', onDown); els.uiCv.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
     els.uiCv.addEventListener('touchstart', onDown, {passive: false}); els.uiCv.addEventListener('touchmove', onMove, {passive: false}); window.addEventListener('touchend', onUp);
 
-    // 원근 보정 및 스캔 필터 적용
     els.prevBtn.onclick = () => {
         if (!isCvLoaded) return;
         
@@ -320,25 +331,20 @@
         }
     };
 
-    // PDF 병합 및 결과 화면 렌더링
     function generateFinalPDF() {
         const { jsPDF } = window.jspdf; 
         const pdf = new jsPDF('p', 'mm', 'a4');
-        
-        els.previewGallery.innerHTML = ''; // 갤러리 초기화
+        els.previewGallery.innerHTML = ''; 
 
         function addPageToPDF(index) {
             if (index >= processedImages.length) {
                 finalPdfBlob = pdf.output('blob');
                 
-                els.workspace.style.display = 'none';
-                els.bottomBar.classList.remove('show');
-                els.cancelBtn.style.visibility = 'hidden';
-                els.resultState.style.display = 'flex';
+                els.workspace.style.display = 'none'; els.bottomBar.classList.remove('show');
+                els.cancelBtn.style.visibility = 'hidden'; els.resultState.style.display = 'flex';
                 return;
             }
             
-            // 미리보기 썸네일 추가
             const thumb = document.createElement('img');
             thumb.src = processedImages[index];
             els.previewGallery.appendChild(thumb);
@@ -358,7 +364,6 @@
         addPageToPDF(0);
     }
 
-    // 결과 화면 기능 할당
     els.openPdfBtn.onclick = () => {
         if(!finalPdfBlob) return;
         const url = URL.createObjectURL(finalPdfBlob);
@@ -369,11 +374,8 @@
         if(!finalPdfBlob) return;
         const url = URL.createObjectURL(finalPdfBlob);
         const a = document.createElement('a');
-        a.href = url;
-        a.download = `Scanned_Document_${Date.now()}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        a.href = url; a.download = `Scanned_Document_${Date.now()}.pdf`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
         URL.revokeObjectURL(url);
     };
 
@@ -382,14 +384,10 @@
         const file = new File([finalPdfBlob], `Scanned_Document_${Date.now()}.pdf`, { type: 'application/pdf' });
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
             try {
-                await navigator.share({
-                    files: [file],
-                    title: '스캔 문서',
-                    text: '스캐너 앱에서 생성된 PDF 문서입니다.'
-                });
+                await navigator.share({ files: [file], title: '스캔 문서', text: '스캐너 앱에서 생성된 PDF 문서입니다.' });
             } catch (err) { console.log('공유 취소됨', err); }
         } else {
-            alert('이 기기/브라우저에서는 공유 기능을 지원하지 않습니다. 다운로드 버튼을 이용해 주세요.');
+            alert('이 브라우저에서는 공유 기능을 지원하지 않습니다. 다운로드 버튼을 이용해 주세요.');
         }
     };
 </script>
